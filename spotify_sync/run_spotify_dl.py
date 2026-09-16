@@ -30,6 +30,24 @@ def _patched_init(self, params=None, *args, **kwargs):
 
 yt_dlp.YoutubeDL.__init__ = _patched_init
 
+# spotify_dl reads sp.artist(...)["genres"] to set the MP3 genre tag, but the
+# Spotify artist endpoint no longer always returns that field, which raises
+# KeyError and aborts the whole download. Guarantee the key so the tag just
+# comes out empty instead.
+import spotipy  # noqa: E402
+
+_orig_artist = spotipy.Spotify.artist
+
+
+def _patched_artist(self, *args, **kwargs):
+    result = _orig_artist(self, *args, **kwargs)
+    if isinstance(result, dict):
+        result.setdefault("genres", [])
+    return result
+
+
+spotipy.Spotify.artist = _patched_artist
+
 from spotify_dl.spotify_dl import spotify_dl  # noqa: E402
 
 if __name__ == "__main__":
