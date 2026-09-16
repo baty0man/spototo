@@ -99,8 +99,10 @@ def fetch_playlist_tracks(sp: spotipy.Spotify, playlist_id: str):
     results = sp.playlist_items(playlist_id, additional_types=("track",))
     while results:
         for item in results.get("items", []):
-            track = item.get("track")
-            if not track or not track.get("id"):
+            # Spotify returns the object under "item" on current API versions and
+            # under "track" on older ones; accept either.
+            track = item.get("track") or item.get("item")
+            if not isinstance(track, dict) or not track.get("id"):
                 continue  # local files / unavailable tracks have no id
             tracks.append(
                 {
@@ -133,6 +135,11 @@ def download_track(track: dict, card_name: str) -> str:
         capture_output=True,
         text=True,
         timeout=180,
+        # spotify_dl writes download_list.log into the cwd and then os.rename()s
+        # it into the output dir. Under Docker the cwd is on the overlay fs and
+        # data/ is a bind mount, so that rename fails with EXDEV. Running from
+        # the staging dir keeps both ends on the same filesystem.
+        cwd=str(staging),
     )
     if result.returncode != 0:
         raise RuntimeError(f"spotify_dl exited {result.returncode}: {result.stderr.strip()}")
