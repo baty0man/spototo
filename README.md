@@ -85,6 +85,65 @@ a requirement:
 
 With either of these set, `REPLICATE_API_TOKEN` isn't even needed.
 
+### Library first, optional AI: `ICON_SOURCE=yoto-library-ai`
+
+This mode tries the official library first. A library **no-match** may use AI
+only when both `REPLICATE_API_TOKEN` and a positive `ICON_AI_MAX_GENERATIONS`
+are configured. The cap defaults to **0**, so hybrid mode is library-only until
+you opt in. A library/provider failure never triggers paid fallback; icon
+failures leave the chapter without an icon and do not stop audio processing.
+Unknown modes and negative/noninteger caps are rejected.
+
+```dotenv
+ICON_SOURCE=yoto-library-ai
+ICON_AI_MAX_GENERATIONS=0
+# ICON_CACHE_DIR=data/icons
+```
+
+`ICON_AI_MAX_GENERATIONS` is a **lifetime attempt allowance in this cache, not
+a monetary budget**. An attempt includes subject extraction, `ICON_CANDIDATES`
+images and potentially a vision judge. Pricing varies. Raising the cap permits
+additional attempts; restarting does not reset it. Legacy `generate` still
+allows generation without this hybrid cap; use hybrid mode for the guard.
+
+The owner-only `ICON_CACHE_DIR` (default `data/icons`) stores an atomic ledger,
+PNGs and uploaded media IDs. Keys include normalized title and model/style/
+candidate/prompt settings, not the filename. Attempts are reserved durably
+**before paid work**, including failed/uncertain attempts. Such attempts without
+a completed PNG never automatically retry generation. A failed upload reuses
+the saved PNG on retry without paying for generation again. Successfully
+uploaded IDs are reused across restarts. Preserve/back up this cache: deleting
+it deletes lifetime accounting too. Do not edit the ledger to reset spending;
+corrupt accounting fails closed. Cache paths are local trusted configuration.
+
+### Backfill missing icons without re-uploading audio
+
+**Stop the main Spototo pipeline first** (`docker compose stop spototo`). The
+pipeline and backfill hold the same nonblocking sibling lock for `STATE_FILE`
+(e.g. `data/state.json.lock`), including token updates and card writes. Never
+remove an active lock file, and use the same state/cache paths for both runs.
+Leave the pipeline stopped until the maintenance command finishes.
+
+```bash
+# Preview only: no icon resolution, uploads, or card writes
+python src/backfill_icons.py --card-id ID
+# Explicit opt-in: fill missing chapter/track icons only, preserving existing icons
+python src/backfill_icons.py --card-id ID --apply
+```
+
+Run with the project's Python dependencies and existing Yoto authentication.
+Backfill never uploads audio; hybrid token/cap rules still apply. Before each
+card write it saves a private original snapshot in `data/icon-backfill-backups`
+(or `--backup-dir PATH`), fsyncs the file and directory entries (including newly
+created backup directories), checks for concurrent card changes and verifies the
+updated chapters by reading them back. A backup/fsync failure prevents the card
+write. The shared lock serializes only local processes using that lock, not
+remote editors. The final GET and POST are not atomic: without conditional
+writes, a remote edit between them can be overwritten. Avoid editing the card
+during maintenance. Inspect any reported conflict or failed verification before
+proceeding. Cache, backups and lock byproducts are ignored by Git. Restart the
+pipeline after maintenance (`docker compose start spototo`).
+
 ### Deletion is safety-scoped
 
 Delete a song from the playlist and its chapter is removed from the Yoto
@@ -196,7 +255,7 @@ instance under your own accounts.
 
 - Single Spotify account, single Yoto account — see Legal above.
 - Audio quality is bounded by whatever YouTube has for a given track.
-- No automated tests yet.
+- Offline resolver/backfill tests use `PYTHONPATH=src python -m unittest discover -s tests -v`.
 
 ## License
 

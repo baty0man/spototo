@@ -9,6 +9,9 @@ data/spotify_state.json
 data/watch/*
 data/processed/*
 data/.staging/
+data/icons/
+data/icon-backfill-backups/
+data/*.lock
 !data/watch/.gitkeep
 !data/processed/.gitkeep
 

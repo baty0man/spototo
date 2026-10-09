@@ -28,13 +28,26 @@ def _load_library(client):
     global _library_cache
     if _library_cache is None:
         icons = client.list_library_icons()
+        if not isinstance(icons, list):
+            raise ValueError("Icon library must be a list")
+        # Validate the entire response before caching or treating it as no-match.
+        for icon in icons:
+            if not isinstance(icon, dict):
+                raise ValueError("Icon library record must be an object")
+            media_id = icon.get("mediaId")
+            if not isinstance(media_id, str) or not media_id.strip():
+                raise ValueError("Icon library mediaId must be a nonempty string")
+            if not isinstance(icon.get("title", ""), str):
+                raise ValueError("Icon library title must be a string")
+            tags = icon.get("publicTags", [])
+            if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
+                raise ValueError("Icon library publicTags must be a list of strings")
         _library_cache = [
             (
                 icon["mediaId"],
                 _tokens(icon.get("title", "")) | {t.lower() for t in icon.get("publicTags", [])},
             )
             for icon in icons
-            if icon.get("mediaId")
         ]
     return _library_cache
 
@@ -42,11 +55,12 @@ def _load_library(client):
 def find_library_icon(client, title: str):
     """Returns the mediaId of the best-matching official Yoto icon for
     `title`, or None if no icon shares even one meaningful keyword/tag."""
+    library = _load_library(client)
     query = _tokens(title)
     if not query:
         return None
     best_id, best_score = None, 0
-    for media_id, tags in _load_library(client):
+    for media_id, tags in library:
         score = len(query & tags)
         if score > best_score:
             best_id, best_score = media_id, score

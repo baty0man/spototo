@@ -26,8 +26,11 @@ class Config:
     # yoto-library: deterministic keyword match against Yoto's own official
     #   icon library -- no AI involved at all. Falls back to no icon if no
     #   good match, never silently falls back to generation.
+    # yoto-library-ai: library first; paid fallback needs token + positive cap.
     # none: no icon step at all.
     ICON_SOURCE = os.environ.get("ICON_SOURCE", "generate")
+    ICON_CACHE_DIR = _path("ICON_CACHE_DIR", "data/icons")
+    ICON_AI_MAX_GENERATIONS = int(os.environ.get("ICON_AI_MAX_GENERATIONS", "0"))
 
     WATCH_DIR = _path("WATCH_DIR", "data/watch")
     PROCESSED_DIR = _path("PROCESSED_DIR", "data/processed")
@@ -45,6 +48,8 @@ class Config:
 
     @classmethod
     def validate(cls):
+        from icon_resolver import validate_icon_config
+        validate_icon_config(cls)
         required = ["YOTO_CLIENT_ID"]
         if cls.ICON_SOURCE == "generate":
             required.append("REPLICATE_API_TOKEN")
